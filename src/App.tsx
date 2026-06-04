@@ -7,18 +7,22 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import RichEditor from './components/RichEditor';
 import Login from './components/Login';
-import { MedicalRecord, Template, TemplateCategory, AppSettings } from './types';
+import { MedicalRecord, Template, TemplateCategory, AppSettings, ClinicalUser } from './types';
 import {
+  deleteUser,
   deleteRecord,
   deleteTemplate,
   defaultSettings,
   defaultTemplates,
+  defaultUsers,
   getRecords,
   getSettings,
   getTemplates,
+  getUsers,
   saveRecord,
   saveSettings,
   saveTemplate,
+  saveUser,
 } from './lib/firebaseData';
 import { sendPrescriptionEmail } from './lib/email';
 
@@ -29,6 +33,8 @@ export default function App() {
   // Data State
   const [records, setRecords] = useState<MedicalRecord[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
+  const [users, setUsers] = useState<ClinicalUser[]>([]);
+  const [currentUser, setCurrentUser] = useState<ClinicalUser | null>(null);
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [firebaseStatus, setFirebaseStatus] = useState<{ ok: boolean; message: string }>({ ok: true, message: '' });
   const [loading, setLoading] = useState(true);
@@ -73,6 +79,17 @@ export default function App() {
   const [emailStatus, setEmailStatus] = useState<{ type: 'success' | 'error' | null; message: string }>({ type: null, message: '' });
   const [sendingEmail, setSendingEmail] = useState(false);
 
+  // User management form
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [userFirstName, setUserFirstName] = useState('');
+  const [userLastName, setUserLastName] = useState('');
+  const [userPhone, setUserPhone] = useState('');
+  const [userEmail, setUserEmail] = useState('');
+  const [userUsername, setUserUsername] = useState('');
+  const [userPassword, setUserPassword] = useState('');
+  const [userRole, setUserRole] = useState<'admin' | 'doctor'>('doctor');
+  const [userActive, setUserActive] = useState(true);
+
   // Load public clinical settings from Firebase. Authentication is session-only.
   useEffect(() => {
     const loadSettings = async () => {
@@ -94,33 +111,38 @@ export default function App() {
     loadSettings();
   }, []);
 
-  const handleLoginSuccess = () => {
+  const handleLoginSuccess = (doctorInfo: { name: string; email: string; phone: string; user: ClinicalUser }) => {
+    setCurrentUser(doctorInfo.user);
     setIsAuthenticated(true);
     fetchInitialData();
   };
 
   const logout = () => {
     setIsAuthenticated(false);
+    setCurrentUser(null);
     setCurrentTab('DASHBOARD');
   };
 
   const fetchInitialData = async () => {
     setLoading(true);
     try {
-      const [firebaseRecords, firebaseTemplates, firebaseSettings] = await Promise.all([
+      const [firebaseRecords, firebaseTemplates, firebaseSettings, firebaseUsers] = await Promise.all([
         getRecords(),
         getTemplates(),
-        getSettings()
+        getSettings(),
+        getUsers()
       ]);
 
       setRecords(firebaseRecords);
       setTemplates(firebaseTemplates);
       setSettings(firebaseSettings);
+      setUsers(firebaseUsers);
       setFirebaseStatus({ ok: true, message: '' });
     } catch (err) {
       console.warn('Firebase data is unavailable; using default templates until Firestore rules are deployed.', err);
       setRecords([]);
       setTemplates(defaultTemplates);
+      setUsers(defaultUsers);
       setSettings((current) => current || defaultSettings);
       setFirebaseStatus({
         ok: false,
@@ -128,6 +150,81 @@ export default function App() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const resetUserForm = () => {
+    setEditingUserId(null);
+    setUserFirstName('');
+    setUserLastName('');
+    setUserPhone('');
+    setUserEmail('');
+    setUserUsername('');
+    setUserPassword('');
+    setUserRole('doctor');
+    setUserActive(true);
+  };
+
+  const handleEditUser = (user: ClinicalUser) => {
+    setEditingUserId(user.id);
+    setUserFirstName(user.firstName);
+    setUserLastName(user.lastName);
+    setUserPhone(user.phone);
+    setUserEmail(user.email);
+    setUserUsername(user.username);
+    setUserPassword(user.password);
+    setUserRole(user.role);
+    setUserActive(user.active);
+  };
+
+  const handleSaveUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!userFirstName.trim() || !userLastName.trim() || !userUsername.trim() || !userPassword.trim()) {
+      alert('შეავსეთ სახელი, გვარი, იუზერი და პაროლი.');
+      return;
+    }
+
+    const duplicate = users.find((user) =>
+      user.id !== editingUserId && user.username.trim().toLowerCase() === userUsername.trim().toLowerCase()
+    );
+    if (duplicate) {
+      alert('ეს იუზერი უკვე არსებობს.');
+      return;
+    }
+
+    try {
+      await saveUser({
+        firstName: userFirstName,
+        lastName: userLastName,
+        phone: userPhone,
+        email: userEmail,
+        username: userUsername,
+        password: userPassword,
+        role: userRole,
+        active: userActive,
+      }, editingUserId || undefined);
+      resetUserForm();
+      await fetchInitialData();
+      alert(editingUserId ? 'მომხმარებელი განახლდა.' : 'მომხმარებელი შეიქმნა.');
+    } catch (err) {
+      console.error(err);
+      setFirebaseStatus({
+        ok: false,
+        message: 'მომხმარებლის შენახვა ვერ მოხერხდა. Firestore rules-ში დაამატეთ users კოლექციის წვდომა.'
+      });
+      alert('მომხმარებლის შენახვა ვერ მოხერხდა.');
+    }
+  };
+
+  const handleDeleteUser = async (id: string) => {
+    if (!confirm('დარწმუნებული ხართ, რომ გსურთ მომხმარებლის წაშლა?')) return;
+    try {
+      await deleteUser(id);
+      setUsers(users.filter((user) => user.id !== id));
+      if (editingUserId === id) resetUserForm();
+    } catch (err) {
+      console.error(err);
+      alert('მომხმარებლის წაშლა ვერ მოხერხდა.');
     }
   };
 
@@ -557,7 +654,7 @@ export default function App() {
                   დანიშნულების მართვა
                 </h1>
                 <p className="text-[11px] text-emerald-600 font-medium mt-0.5">
-                  {settings?.doctorName} • 591 401 506
+                  {currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : settings?.doctorName} • {currentUser?.phone || settings?.doctorPhone}
                 </p>
               </div>
             </div>
@@ -1510,6 +1607,139 @@ export default function App() {
                   </button>
                 </form>
 
+              </div>
+
+              <div className="bg-white p-5 rounded-xl border border-slate-100 shadow-sm space-y-5">
+                <div className="flex items-center justify-between gap-3 border-b border-slate-50 pb-3">
+                  <div>
+                    <h3 className="text-xs font-bold text-slate-700 uppercase tracking-widest">მომხმარებლები / ექიმები</h3>
+                    <p className="text-[10px] text-slate-400 mt-1">შექმენით ექიმების იუზერები, შეცვალეთ პაროლი და დაარედაქტირეთ საკონტაქტო ინფორმაცია.</p>
+                  </div>
+                  {editingUserId && (
+                    <button
+                      type="button"
+                      onClick={resetUserForm}
+                      className="px-3 py-1.5 text-xs border border-slate-200 text-slate-500 rounded-lg hover:bg-slate-50 transition"
+                    >
+                      ახალი მომხმარებელი
+                    </button>
+                  )}
+                </div>
+
+                <form onSubmit={handleSaveUser} className="grid grid-cols-1 md:grid-cols-6 gap-3">
+                  <input
+                    type="text"
+                    required
+                    value={userFirstName}
+                    onChange={(e) => setUserFirstName(e.target.value)}
+                    placeholder="სახელი"
+                    className="h-10 px-3 border border-slate-200 rounded-lg text-xs outline-none focus:border-emerald-500"
+                  />
+                  <input
+                    type="text"
+                    required
+                    value={userLastName}
+                    onChange={(e) => setUserLastName(e.target.value)}
+                    placeholder="გვარი"
+                    className="h-10 px-3 border border-slate-200 rounded-lg text-xs outline-none focus:border-emerald-500"
+                  />
+                  <input
+                    type="text"
+                    value={userPhone}
+                    onChange={(e) => setUserPhone(e.target.value)}
+                    placeholder="ტელეფონი"
+                    className="h-10 px-3 border border-slate-200 rounded-lg text-xs outline-none focus:border-emerald-500"
+                  />
+                  <input
+                    type="email"
+                    value={userEmail}
+                    onChange={(e) => setUserEmail(e.target.value)}
+                    placeholder="იმეილი"
+                    className="h-10 px-3 border border-slate-200 rounded-lg text-xs outline-none focus:border-emerald-500"
+                  />
+                  <input
+                    type="text"
+                    required
+                    value={userUsername}
+                    onChange={(e) => setUserUsername(e.target.value)}
+                    placeholder="იუზერი"
+                    className="h-10 px-3 border border-slate-200 rounded-lg text-xs outline-none focus:border-emerald-500"
+                  />
+                  <input
+                    type="text"
+                    required
+                    value={userPassword}
+                    onChange={(e) => setUserPassword(e.target.value)}
+                    placeholder="პაროლი"
+                    className="h-10 px-3 border border-slate-200 rounded-lg text-xs font-mono outline-none focus:border-emerald-500"
+                  />
+                  <select
+                    value={userRole}
+                    onChange={(e) => setUserRole(e.target.value as 'admin' | 'doctor')}
+                    className="h-10 px-3 border border-slate-200 rounded-lg text-xs outline-none focus:border-emerald-500 bg-white"
+                  >
+                    <option value="doctor">ექიმი</option>
+                    <option value="admin">ადმინისტრატორი</option>
+                  </select>
+                  <label className="h-10 px-3 border border-slate-200 rounded-lg text-xs flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={userActive}
+                      onChange={(e) => setUserActive(e.target.checked)}
+                      className="w-4 h-4"
+                    />
+                    აქტიური
+                  </label>
+                  <button
+                    type="submit"
+                    className="md:col-span-2 h-10 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition"
+                  >
+                    {editingUserId ? 'მომხმარებლის განახლება' : 'მომხმარებლის შექმნა'}
+                  </button>
+                </form>
+
+                <div className="overflow-x-auto border border-slate-100 rounded-xl">
+                  <table className="min-w-full text-xs">
+                    <thead className="bg-slate-50 text-slate-500">
+                      <tr>
+                        <th className="text-left px-3 py-2 font-bold">ექიმი</th>
+                        <th className="text-left px-3 py-2 font-bold">კონტაქტი</th>
+                        <th className="text-left px-3 py-2 font-bold">იუზერი</th>
+                        <th className="text-left px-3 py-2 font-bold">როლი</th>
+                        <th className="text-right px-3 py-2 font-bold">ქმედება</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {users.map((user) => (
+                        <tr key={user.id} className="border-t border-slate-100">
+                          <td className="px-3 py-2 font-semibold text-slate-700">
+                            {user.firstName} {user.lastName}
+                            {!user.active && <span className="ml-2 text-[10px] text-red-500">გათიშულია</span>}
+                          </td>
+                          <td className="px-3 py-2 text-slate-500">{user.phone || '-'} / {user.email || '-'}</td>
+                          <td className="px-3 py-2 font-mono text-slate-600">{user.username}</td>
+                          <td className="px-3 py-2 text-slate-500">{user.role === 'admin' ? 'ადმინისტრატორი' : 'ექიმი'}</td>
+                          <td className="px-3 py-2 text-right">
+                            <button
+                              type="button"
+                              onClick={() => handleEditUser(user)}
+                              className="px-2 py-1 text-emerald-700 hover:bg-emerald-50 rounded-lg font-bold"
+                            >
+                              რედაქტირება
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteUser(user.id)}
+                              className="px-2 py-1 text-red-500 hover:bg-red-50 rounded-lg font-bold"
+                            >
+                              წაშლა
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
 
             </div>

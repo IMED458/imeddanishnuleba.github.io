@@ -45,8 +45,23 @@ export interface AppSettings {
   emailJsFromName: string;
 }
 
+export interface ClinicalUser {
+  id: string;
+  firstName: string;
+  lastName: string;
+  phone: string;
+  email: string;
+  username: string;
+  password: string;
+  role: 'admin' | 'doctor';
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface DatabaseSchema {
   records: MedicalRecord[];
   templates: Template[];
   settings: AppSettings;
+  users: ClinicalUser[];
 }

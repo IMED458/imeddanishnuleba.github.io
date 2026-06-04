@@ -10,7 +10,7 @@ import {
   setDoc,
   updateDoc,
 } from 'firebase/firestore';
-import { AppSettings, MedicalRecord, Template } from '../types';
+import { AppSettings, ClinicalUser, MedicalRecord, Template } from '../types';
 import { db } from './firebase';
 
 const settingsRef = doc(db, 'app', 'settings');
@@ -38,6 +38,22 @@ export const defaultTemplates: Template[] = [
     name: 'განმეორებითი ვიზიტი',
     category: 'კონტროლი / განმეორებითი ვიზიტი',
     content: '<p>გთხოვთ, გამოცხადდეთ განმეორებით კონსულტაციაზე 10-14 დღის განმავლობაში.</p>',
+  },
+];
+
+export const defaultUsers: ClinicalUser[] = [
+  {
+    id: 'user_default_admin',
+    firstName: 'გიორგი',
+    lastName: 'იმედაშვილი',
+    phone: '591 401 506',
+    email: 'gimedashvili7@gmail.com',
+    username: 'giorgi',
+    password: 'giorgi591',
+    role: 'admin',
+    active: true,
+    createdAt: '2026-06-04T00:00:00.000Z',
+    updatedAt: '2026-06-04T00:00:00.000Z',
   },
 ];
 
@@ -106,4 +122,36 @@ export async function saveTemplate(template: Omit<Template, 'id'>, id?: string) 
 
 export async function deleteTemplate(id: string) {
   await deleteDoc(doc(db, 'templates', id));
+}
+
+export async function getUsers() {
+  const snapshot = await getDocs(collection(db, 'users'));
+  if (snapshot.empty) {
+    await Promise.all(defaultUsers.map(({ id, ...user }) => addDoc(collection(db, 'users'), user)));
+    const seeded = await getDocs(collection(db, 'users'));
+    return seeded.docs.map((item) => ({ id: item.id, ...item.data() }) as ClinicalUser);
+  }
+
+  return snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as ClinicalUser);
+}
+
+export async function saveUser(user: Omit<ClinicalUser, 'id' | 'createdAt' | 'updatedAt'>, id?: string) {
+  const now = new Date().toISOString();
+
+  if (id) {
+    const ref = doc(db, 'users', id);
+    await updateDoc(ref, { ...user, updatedAt: now });
+    return { id, ...user, updatedAt: now } as ClinicalUser;
+  }
+
+  const ref = await addDoc(collection(db, 'users'), {
+    ...user,
+    createdAt: now,
+    updatedAt: now,
+  });
+  return { id: ref.id, ...user, createdAt: now, updatedAt: now } as ClinicalUser;
+}
+
+export async function deleteUser(id: string) {
+  await deleteDoc(doc(db, 'users', id));
 }

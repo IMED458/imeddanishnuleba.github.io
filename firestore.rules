@@ -13,5 +13,9 @@ service cloud.firestore {
     match /templates/{templateId} {
       allow read, write, delete: if true;
     }
+
+    match /users/{userId} {
+      allow read, write, delete: if true;
+    }
   }
 }

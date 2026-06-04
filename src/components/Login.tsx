@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { ShieldCheck, Eye, EyeOff, Loader } from 'lucide-react';
-import { defaultSettings, getSettings } from '../lib/firebaseData';
+import { defaultSettings, defaultUsers, getSettings, getUsers } from '../lib/firebaseData';
+import { ClinicalUser } from '../types';
 
 interface LoginProps {
-  onLoginSuccess: (doctorInfo: { name: string; email: string; phone: string }) => void;
+  onLoginSuccess: (doctorInfo: { name: string; email: string; phone: string; user: ClinicalUser }) => void;
 }
 
 export default function Login({ onLoginSuccess }: LoginProps) {
+  const [username, setUsername] = useState('giorgi');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -14,8 +16,8 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!password.trim()) {
-      setError('გთხოვთ შეიყვანოთ პაროლი');
+    if (!username.trim() || !password.trim()) {
+      setError('გთხოვთ შეიყვანოთ იუზერი და პაროლი');
       return;
     }
 
@@ -24,20 +26,30 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
     try {
       let settings = defaultSettings;
+      let users = defaultUsers;
       try {
-        settings = await getSettings();
+        [settings, users] = await Promise.all([getSettings(), getUsers()]);
       } catch (err) {
-        console.warn('Firebase settings are unavailable; checking against default clinical settings.', err);
+        console.warn('Firebase login data is unavailable; checking against default clinical user.', err);
       }
 
-      if (password === settings.doctorPasswordHash) {
+      const normalizedUsername = username.trim().toLowerCase();
+      const user = users.find((candidate) =>
+        candidate.active &&
+        candidate.username.trim().toLowerCase() === normalizedUsername &&
+        candidate.password === password
+      );
+
+      if (user || (normalizedUsername === 'giorgi' && password === settings.doctorPasswordHash)) {
+        const activeUser = user || defaultUsers[0];
         onLoginSuccess({
-          name: settings.doctorName,
-          email: settings.doctorEmail,
-          phone: settings.doctorPhone
+          name: `${activeUser.firstName} ${activeUser.lastName}`,
+          email: activeUser.email,
+          phone: activeUser.phone,
+          user: activeUser
         });
       } else {
-        setError('არასწორი კლინიკური პაროლი!');
+        setError('არასწორი იუზერი ან პაროლი!');
       }
     } catch (err) {
       console.error(err);
@@ -79,7 +91,20 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
           <div>
             <label className="block text-xs font-semibold text-slate-600 uppercase tracking-widest mb-1.5 gray-800">
-              შეიყვანეთ პაროლი (Clinical Key)
+              იუზერი
+            </label>
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="giorgi"
+              className="w-full h-11 px-4 py-2 border border-slate-200 rounded-xl outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition text-center font-mono placeholder-slate-300"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 uppercase tracking-widest mb-1.5 gray-800">
+              პაროლი
             </label>
             <div className="relative">
               <input
@@ -98,7 +123,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
               </button>
             </div>
             <p className="mt-1.5 text-[11px] text-slate-400 text-center">
-              სტანდარტული პაროლი: <code className="bg-slate-100 px-1 py-0.5 rounded text-amber-700 font-mono">giorgi591</code>
+              სტანდარტული იუზერი: <code className="bg-slate-100 px-1 py-0.5 rounded text-amber-700 font-mono">giorgi</code> / პაროლი: <code className="bg-slate-100 px-1 py-0.5 rounded text-amber-700 font-mono">giorgi591</code>
             </p>
           </div>
 
