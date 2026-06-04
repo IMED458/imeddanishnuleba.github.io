@@ -20,8 +20,8 @@ export const defaultSettings: AppSettings = {
   doctorPhone: '591 401 506',
   doctorEmail: 'gimedashvili7@gmail.com',
   doctorPasswordHash: 'giorgi591',
-  emailJsServiceId: '',
-  emailJsTemplateId: '',
+  emailJsServiceId: 'service_4fawvgm',
+  emailJsTemplateId: 'template_yzuhn16',
   emailJsPublicKey: '',
   emailJsFromName: 'ექიმი გიორგი იმედაშვილი',
 };
