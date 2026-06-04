@@ -1,0 +1,6 @@
+{
+  "name": "ექიმის დანიშნულების პროგრამა",
+  "description": "სამედიცინო ჩანაწერების, არქივის, შაბლონებისა და დანიშნულებების მართვის თანამედროვე ვებ-პროგრამა ექიმი გიორგი იმედაშვილისთვის",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
