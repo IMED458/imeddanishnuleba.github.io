@@ -26,13 +26,15 @@ export const defaultSettings: AppSettings = {
   emailJsFromName: 'ექიმი გიორგი იმედაშვილი',
 };
 
-const defaultTemplates: Omit<Template, 'id'>[] = [
+export const defaultTemplates: Template[] = [
   {
+    id: 'tpl_default_general',
     name: 'ზოგადი დანიშნულება',
     category: 'ზოგადი დანიშნულება',
     content: '<h4><strong>რეკომენდაციები:</strong></h4><ul><li>ზუსტად დაიცავით დანიშნული მკურნალობის რეჟიმი.</li><li>მდგომარეობის გაუარესების შემთხვევაში დაუკავშირდით მკურნალ ექიმს.</li></ul>',
   },
   {
+    id: 'tpl_default_followup',
     name: 'განმეორებითი ვიზიტი',
     category: 'კონტროლი / განმეორებითი ვიზიტი',
     content: '<p>გთხოვთ, გამოცხადდეთ განმეორებით კონსულტაციაზე 10-14 დღის განმავლობაში.</p>',
@@ -83,7 +85,7 @@ export async function deleteRecord(id: string) {
 export async function getTemplates() {
   const snapshot = await getDocs(collection(db, 'templates'));
   if (snapshot.empty) {
-    await Promise.all(defaultTemplates.map((template) => addDoc(collection(db, 'templates'), template)));
+    await Promise.all(defaultTemplates.map(({ id, ...template }) => addDoc(collection(db, 'templates'), template)));
     const seeded = await getDocs(collection(db, 'templates'));
     return seeded.docs.map((item) => ({ id: item.id, ...item.data() }) as Template);
   }

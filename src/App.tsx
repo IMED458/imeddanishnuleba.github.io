@@ -12,6 +12,7 @@ import {
   deleteRecord,
   deleteTemplate,
   defaultSettings,
+  defaultTemplates,
   getRecords,
   getSettings,
   getTemplates,
@@ -29,6 +30,7 @@ export default function App() {
   const [records, setRecords] = useState<MedicalRecord[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [settings, setSettings] = useState<AppSettings | null>(null);
+  const [firebaseStatus, setFirebaseStatus] = useState<{ ok: boolean; message: string }>({ ok: true, message: '' });
   const [loading, setLoading] = useState(true);
 
   // New Record State
@@ -76,9 +78,14 @@ export default function App() {
     const loadSettings = async () => {
       try {
         setSettings(await getSettings());
+        setFirebaseStatus({ ok: true, message: '' });
       } catch (err) {
         console.warn('Firebase settings are unavailable; using default clinical settings until Firestore rules are deployed.', err);
         setSettings(defaultSettings);
+        setFirebaseStatus({
+          ok: false,
+          message: 'Firebase Firestore წვდომა ჯერ დაბლოკილია. გვერდი იტვირთება default რეჟიმში, მაგრამ ჩანაწერების შენახვისთვის საჭიროა Firestore rules-ის გამოქვეყნება.'
+        });
       } finally {
         setLoading(false);
       }
@@ -109,8 +116,16 @@ export default function App() {
       setRecords(firebaseRecords);
       setTemplates(firebaseTemplates);
       setSettings(firebaseSettings);
+      setFirebaseStatus({ ok: true, message: '' });
     } catch (err) {
-      console.error('Error fetching Firebase data: ', err);
+      console.warn('Firebase data is unavailable; using default templates until Firestore rules are deployed.', err);
+      setRecords([]);
+      setTemplates(defaultTemplates);
+      setSettings((current) => current || defaultSettings);
+      setFirebaseStatus({
+        ok: false,
+        message: 'Firebase Firestore წვდომა ჯერ დაბლოკილია. საიტი იტვირთება, მაგრამ რეალური არქივი/შენახვა ჩაირთვება rules deploy-ის შემდეგ.'
+      });
     } finally {
       setLoading(false);
     }
@@ -159,12 +174,17 @@ export default function App() {
 
     try {
       await saveRecord(payload, editingRecordId || undefined);
+      setFirebaseStatus({ ok: true, message: '' });
       clearDraft();
       await fetchInitialData();
       setCurrentTab('ARCHIVE');
       alert(editingRecordId ? 'ჩანაწერი განახლდა!' : 'ჩანაწერი წარმატებით შეინახა Firebase არქივში!');
     } catch (err) {
       console.error(err);
+      setFirebaseStatus({
+        ok: false,
+        message: 'ჩანაწერის Firebase-ში შენახვა ვერ მოხერხდა. გადაამოწმეთ Firestore rules.'
+      });
       alert('Firebase-ში მონაცემების შენახვა ვერ მოხერხდა.');
     }
   };
@@ -213,9 +233,14 @@ export default function App() {
     if (!confirm('ჩანაწერის წაშლა სამუდამოდ წაშლის მონაცემებს არქივიდან. დარწმუნებული ხართ?')) return;
     try {
       await deleteRecord(id);
+      setFirebaseStatus({ ok: true, message: '' });
       setRecords(records.filter(r => r.id !== id));
     } catch (err) {
       console.error(err);
+      setFirebaseStatus({
+        ok: false,
+        message: 'Firebase-დან წაშლა ვერ მოხერხდა. გადაამოწმეთ Firestore rules.'
+      });
       alert('Firebase-დან წაშლა ვერ მოხერხდა.');
     }
   };
@@ -293,6 +318,7 @@ export default function App() {
 
     try {
       await saveTemplate(payload, editingTemplateId || undefined);
+      setFirebaseStatus({ ok: true, message: '' });
       setNewTemplateName('');
       setNewTemplateContent('');
       setEditingTemplateId(null);
@@ -300,6 +326,10 @@ export default function App() {
       alert(editingTemplateId ? 'შაბლონი განახლდა!' : 'შაბლონი წარმატებით შეიქმნა!');
     } catch (err) {
       console.error(err);
+      setFirebaseStatus({
+        ok: false,
+        message: 'შაბლონის Firebase-ში შენახვა ვერ მოხერხდა. გადაამოწმეთ Firestore rules.'
+      });
       alert('შაბლონის Firebase-ში შენახვა ვერ მოხერხდა.');
     }
   };
@@ -329,9 +359,14 @@ export default function App() {
     if (!confirm('დარწმუნებული ხართ, რომ გსურთ შაბლონის წაშლა?')) return;
     try {
       await deleteTemplate(id);
+      setFirebaseStatus({ ok: true, message: '' });
       setTemplates(templates.filter(t => t.id !== id));
     } catch (err) {
       console.error(err);
+      setFirebaseStatus({
+        ok: false,
+        message: 'შაბლონის წაშლა ვერ მოხერხდა. გადაამოწმეთ Firestore rules.'
+      });
       alert('შაბლონის წაშლა ვერ მოხერხდა.');
     }
   };
@@ -345,10 +380,15 @@ export default function App() {
         content: tpl.content
       };
       await saveTemplate(payload);
+      setFirebaseStatus({ ok: true, message: '' });
       await fetchInitialData();
       alert('შაბლონის დუბლირება წარმატებით დასრულდა!');
     } catch (err) {
       console.error(err);
+      setFirebaseStatus({
+        ok: false,
+        message: 'შაბლონის დუბლირება ვერ მოხერხდა. გადაამოწმეთ Firestore rules.'
+      });
       alert('შაბლონის დუბლირება ვერ მოხერხდა.');
     }
   };
@@ -360,10 +400,15 @@ export default function App() {
 
     try {
       await saveSettings(settings);
+      setFirebaseStatus({ ok: true, message: '' });
       alert('პარამეტრები წარმატებით შეინახა Firebase-ში!');
       await fetchInitialData();
     } catch (err) {
       console.error(err);
+      setFirebaseStatus({
+        ok: false,
+        message: 'Firebase პარამეტრების შენახვა ვერ მოხერხდა. გადაამოწმეთ Firestore rules.'
+      });
       alert('შეცდომა Firebase პარამეტრების შენახვისას.');
     }
   };
@@ -564,6 +609,11 @@ export default function App() {
 
         {/* Outer Content frame */}
         <main className="max-w-7xl mx-auto p-4 md:py-8">
+          {!firebaseStatus.ok && (
+            <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-medium text-amber-900">
+              {firebaseStatus.message}
+            </div>
+          )}
           
           {/* =========================================================================
               TAB: DASHBOARD
