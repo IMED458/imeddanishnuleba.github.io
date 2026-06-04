@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ShieldCheck, Eye, EyeOff, Loader } from 'lucide-react';
+import { defaultSettings, getSettings } from '../lib/firebaseData';
 
 interface LoginProps {
   onLoginSuccess: (doctorInfo: { name: string; email: string; phone: string }) => void;
@@ -22,23 +23,25 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     setError('');
 
     try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password })
-      });
+      let settings = defaultSettings;
+      try {
+        settings = await getSettings();
+      } catch (err) {
+        console.warn('Firebase settings are unavailable; checking against default clinical settings.', err);
+      }
 
-      const data = await response.json();
-      if (response.ok && data.success) {
-        // Save token to localStorage for persistent access
-        localStorage.setItem('doctor_auth_password', password);
-        onLoginSuccess(data.doctor);
+      if (password === settings.doctorPasswordHash) {
+        onLoginSuccess({
+          name: settings.doctorName,
+          email: settings.doctorEmail,
+          phone: settings.doctorPhone
+        });
       } else {
-        setError(data.message || 'არასწორი კლინიკური პაროლი!');
+        setError('არასწორი კლინიკური პაროლი!');
       }
     } catch (err) {
       console.error(err);
-      setError('სერვერთან კავშირი ვერ ხერხდება. გთხოვთ სცადოთ კვლავ.');
+      setError('Firebase-თან კავშირი ვერ ხერხდება. გთხოვთ სცადოთ კვლავ.');
     } finally {
       setLoading(false);
     }

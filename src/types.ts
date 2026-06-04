@@ -39,11 +39,10 @@ export interface AppSettings {
   doctorPhone: string;
   doctorEmail: string;
   doctorPasswordHash: string; // SHA-256 or simple text for simplicity, defaults to 'giorgi591' or 'giorgi777'
-  smtpHost: string;
-  smtpPort: number;
-  smtpUser: string;
-  smtpPass: string;
-  smtpSecure: boolean;
+  emailJsServiceId: string;
+  emailJsTemplateId: string;
+  emailJsPublicKey: string;
+  emailJsFromName: string;
 }
 
 export interface DatabaseSchema {

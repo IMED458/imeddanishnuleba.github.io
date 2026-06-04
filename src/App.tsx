@@ -8,6 +8,18 @@ import { motion, AnimatePresence } from 'motion/react';
 import RichEditor from './components/RichEditor';
 import Login from './components/Login';
 import { MedicalRecord, Template, TemplateCategory, AppSettings } from './types';
+import {
+  deleteRecord,
+  deleteTemplate,
+  defaultSettings,
+  getRecords,
+  getSettings,
+  getTemplates,
+  saveRecord,
+  saveSettings,
+  saveTemplate,
+} from './lib/firebaseData';
+import { sendPrescriptionEmail } from './lib/email';
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -59,35 +71,21 @@ export default function App() {
   const [emailStatus, setEmailStatus] = useState<{ type: 'success' | 'error' | null; message: string }>({ type: null, message: '' });
   const [sendingEmail, setSendingEmail] = useState(false);
 
-  // Load Initial Session auth from localStorage
+  // Load public clinical settings from Firebase. Authentication is session-only.
   useEffect(() => {
-    const savedPass = localStorage.getItem('doctor_auth_password');
-    if (savedPass) {
-      verifySavedPassword(savedPass);
-    } else {
-      setLoading(false);
-    }
-  }, []);
-
-  const verifySavedPassword = async (pass: string) => {
-    try {
-      const res = await fetch('/api/auth/verify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: pass })
-      });
-      if (res.ok) {
-        setIsAuthenticated(true);
-        fetchInitialData();
-      } else {
-        localStorage.removeItem('doctor_auth_password');
+    const loadSettings = async () => {
+      try {
+        setSettings(await getSettings());
+      } catch (err) {
+        console.warn('Firebase settings are unavailable; using default clinical settings until Firestore rules are deployed.', err);
+        setSettings(defaultSettings);
+      } finally {
         setLoading(false);
       }
-    } catch {
-      localStorage.removeItem('doctor_auth_password');
-      setLoading(false);
-    }
-  };
+    };
+
+    loadSettings();
+  }, []);
 
   const handleLoginSuccess = () => {
     setIsAuthenticated(true);
@@ -95,72 +93,30 @@ export default function App() {
   };
 
   const logout = () => {
-    localStorage.removeItem('doctor_auth_password');
     setIsAuthenticated(false);
     setCurrentTab('DASHBOARD');
   };
 
-  // Fetch from Express REST APIs
   const fetchInitialData = async () => {
     setLoading(true);
     try {
-      const [recRes, tempRes, setRes] = await Promise.all([
-        fetch('/api/records'),
-        fetch('/api/templates'),
-        fetch('/api/settings')
+      const [firebaseRecords, firebaseTemplates, firebaseSettings] = await Promise.all([
+        getRecords(),
+        getTemplates(),
+        getSettings()
       ]);
 
-      if (recRes.ok) setRecords(await recRes.json());
-      if (tempRes.ok) setTemplates(await tempRes.json());
-      if (setRes.ok) setSettings(await setRes.json());
+      setRecords(firebaseRecords);
+      setTemplates(firebaseTemplates);
+      setSettings(firebaseSettings);
     } catch (err) {
-      console.error('Error fetching backend data: ', err);
+      console.error('Error fetching Firebase data: ', err);
     } finally {
       setLoading(false);
     }
   };
 
-  // Auto-save form contents locally so the doctor doesn't lose progress on page reload
-  useEffect(() => {
-    if (currentTab === 'NEW_RECORD') {
-      const draft = {
-        patientName, patientAge, patientGender, patientPhone, patientEmail, visitDate, patientNotes,
-        complaints, anamnesis, diagnosis, prescription, doctorNotes, editingRecordId
-      };
-      localStorage.setItem('prescription_form_draft', JSON.stringify(draft));
-    }
-  }, [
-    patientName, patientAge, patientGender, patientPhone, patientEmail, visitDate, patientNotes,
-    complaints, anamnesis, diagnosis, prescription, doctorNotes, currentTab, editingRecordId
-  ]);
-
-  // Load draft if available
-  const loadDraft = () => {
-    const raw = localStorage.getItem('prescription_form_draft');
-    if (raw) {
-      try {
-        const draft = JSON.parse(raw);
-        setPatientName(draft.patientName || '');
-        setPatientAge(draft.patientAge || '');
-        setPatientGender(draft.patientGender || 'მამრობითი');
-        setPatientPhone(draft.patientPhone || '');
-        setPatientEmail(draft.patientEmail || '');
-        setVisitDate(draft.visitDate || new Date().toISOString().split('T')[0]);
-        setPatientNotes(draft.patientNotes || '');
-        setComplaints(draft.complaints || '');
-        setAnamnesis(draft.anamnesis || '');
-        setDiagnosis(draft.diagnosis || '');
-        setPrescription(draft.prescription || '');
-        setDoctorNotes(draft.doctorNotes || '');
-        setEditingRecordId(draft.editingRecordId || null);
-      } catch (e) {
-        console.error(e);
-      }
-    }
-  };
-
   const clearDraft = () => {
-    localStorage.removeItem('prescription_form_draft');
     setPatientName('');
     setPatientAge('');
     setPatientGender('მამრობითი');
@@ -202,32 +158,14 @@ export default function App() {
     };
 
     try {
-      let res;
-      if (editingRecordId) {
-        res = await fetch(`/api/records/${editingRecordId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-      } else {
-        res = await fetch('/api/records', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-      }
-
-      if (res.ok) {
-        clearDraft();
-        await fetchInitialData();
-        setCurrentTab('ARCHIVE');
-        alert(editingRecordId ? 'ჩანაწერი განახლდა!' : 'ჩანაწერი წარმატებით შეინახა არქივში!');
-      } else {
-        alert('მონაცემების შენახვა ვერ მოხერხდა.');
-      }
+      await saveRecord(payload, editingRecordId || undefined);
+      clearDraft();
+      await fetchInitialData();
+      setCurrentTab('ARCHIVE');
+      alert(editingRecordId ? 'ჩანაწერი განახლდა!' : 'ჩანაწერი წარმატებით შეინახა Firebase არქივში!');
     } catch (err) {
       console.error(err);
-      alert('სერვერთან კავშირი გაწყდა.');
+      alert('Firebase-ში მონაცემების შენახვა ვერ მოხერხდა.');
     }
   };
 
@@ -274,14 +212,11 @@ export default function App() {
   const handleDeleteRecord = async (id: string) => {
     if (!confirm('ჩანაწერის წაშლა სამუდამოდ წაშლის მონაცემებს არქივიდან. დარწმუნებული ხართ?')) return;
     try {
-      const res = await fetch(`/api/records/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        setRecords(records.filter(r => r.id !== id));
-      } else {
-        alert('წაშლა ვერ მოხერხდა.');
-      }
+      await deleteRecord(id);
+      setRecords(records.filter(r => r.id !== id));
     } catch (err) {
       console.error(err);
+      alert('Firebase-დან წაშლა ვერ მოხერხდა.');
     }
   };
 
@@ -321,36 +256,21 @@ export default function App() {
     setEmailStatus({ type: null, message: '' });
 
     try {
-      const res = await fetch('/api/send-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          to: activeEmailRecord.patient.email,
-          subject: customEmailSubject,
-          patientName: activeEmailRecord.patient.name,
-          visitDate: activeEmailRecord.patient.visitDate,
-          prescriptionHtml: activeEmailRecord.prescription,
-          emailBody: `მოგესალმებით ${activeEmailRecord.patient.name}, თანდართულ წერილში იხილავთ თქვენს რეცეპტს ექიმ გიორგი იმედაშვილისგან.`
-        })
+      if (!settings) throw new Error('პარამეტრები ჯერ არ არის ჩატვირთული.');
+      await sendPrescriptionEmail({
+        record: activeEmailRecord,
+        subject: customEmailSubject,
+        settings,
       });
-
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setEmailStatus({
-          type: 'success',
-          message: data.message || 'დანიშნულება წარმატებით გაეგზავნა პაციენტს!'
-        });
-      } else {
-        setEmailStatus({
-          type: 'error',
-          message: data.message || 'ელ-ფოსტის გაგზავნა ვერ მოხერხდა. გადაამოწმეთ SMTP პარამეტრები.'
-        });
-      }
-    } catch (err) {
+      setEmailStatus({
+        type: 'success',
+        message: 'დანიშნულება წარმატებით გაეგზავნა პაციენტს EmailJS-ით!'
+      });
+    } catch (err: any) {
       console.error(err);
       setEmailStatus({
         type: 'error',
-        message: 'ელ-ფოსტის გაგზავნისას დაფიქსირდა ტექნიკური შეცდომა.'
+        message: err.message || 'ელ-ფოსტის გაგზავნისას დაფიქსირდა ტექნიკური შეცდომა.'
       });
     } finally {
       setSendingEmail(false);
@@ -372,32 +292,15 @@ export default function App() {
     };
 
     try {
-      let res;
-      if (editingTemplateId) {
-        res = await fetch(`/api/templates/${editingTemplateId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-      } else {
-        res = await fetch('/api/templates', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-      }
-
-      if (res.ok) {
-        setNewTemplateName('');
-        setNewTemplateContent('');
-        setEditingTemplateId(null);
-        await fetchInitialData();
-        alert(editingTemplateId ? 'შაბლონი განახლდა!' : 'შაბლონი წარმატებით შეიქმნა!');
-      } else {
-        alert('შაბლონის შენახვა ვერ მოხერხდა.');
-      }
+      await saveTemplate(payload, editingTemplateId || undefined);
+      setNewTemplateName('');
+      setNewTemplateContent('');
+      setEditingTemplateId(null);
+      await fetchInitialData();
+      alert(editingTemplateId ? 'შაბლონი განახლდა!' : 'შაბლონი წარმატებით შეიქმნა!');
     } catch (err) {
       console.error(err);
+      alert('შაბლონის Firebase-ში შენახვა ვერ მოხერხდა.');
     }
   };
 
@@ -425,12 +328,11 @@ export default function App() {
   const handleDeleteTemplate = async (id: string) => {
     if (!confirm('დარწმუნებული ხართ, რომ გსურთ შაბლონის წაშლა?')) return;
     try {
-      const res = await fetch(`/api/templates/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        setTemplates(templates.filter(t => t.id !== id));
-      }
+      await deleteTemplate(id);
+      setTemplates(templates.filter(t => t.id !== id));
     } catch (err) {
       console.error(err);
+      alert('შაბლონის წაშლა ვერ მოხერხდა.');
     }
   };
 
@@ -442,17 +344,12 @@ export default function App() {
         category: tpl.category,
         content: tpl.content
       };
-      const res = await fetch('/api/templates', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      if (res.ok) {
-        await fetchInitialData();
-        alert('შაბლონის დუბლირება წარმატებით დასრულდა!');
-      }
+      await saveTemplate(payload);
+      await fetchInitialData();
+      alert('შაბლონის დუბლირება წარმატებით დასრულდა!');
     } catch (err) {
       console.error(err);
+      alert('შაბლონის დუბლირება ვერ მოხერხდა.');
     }
   };
 
@@ -462,19 +359,12 @@ export default function App() {
     if (!settings) return;
 
     try {
-      const res = await fetch('/api/settings', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(settings)
-      });
-      if (res.ok) {
-        alert('პარამეტრები წარმატებით შეინახა ბაზაში!');
-        await fetchInitialData();
-      } else {
-        alert('შეცდომა პარამეტრების შენახვისას.');
-      }
+      await saveSettings(settings);
+      alert('პარამეტრები წარმატებით შეინახა Firebase-ში!');
+      await fetchInitialData();
     } catch (err) {
       console.error(err);
+      alert('შეცდომა Firebase პარამეტრების შენახვისას.');
     }
   };
 
@@ -1439,7 +1329,7 @@ export default function App() {
               <div>
                 <h2 className="text-lg font-bold text-slate-800">პროგრამის პარამეტრები</h2>
                 <p className="text-xs text-slate-400">
-                  მართეთ ექიმის პირადი პროფილი, კლინიკური გვერდის უსაფრთხოების პაროლი და SMTP ფოსტის პარამეტრები
+                  მართეთ ექიმის პირადი პროფილი, კლინიკური გვერდის უსაფრთხოების პაროლი და EmailJS გაგზავნის პარამეტრები
                 </p>
               </div>
 
@@ -1506,72 +1396,59 @@ export default function App() {
                   </button>
                 </form>
 
-                {/* SMTP Email Server config */}
+                {/* EmailJS config */}
                 <form onSubmit={handleSaveSettings} className="bg-white p-5 rounded-xl border border-slate-100 shadow-sm space-y-4">
                   <h3 className="text-xs font-bold text-slate-700 uppercase tracking-widest border-b border-slate-50 pb-2">
-                    ✉️ SMTP ფოსტის სერვერი (ავტომატური გაგზავნისთვის)
+                    ✉️ EmailJS გაგზავნა
                   </h3>
 
                   <p className="text-[10px] text-slate-500 leading-normal">
-                    მონაცემები გამოიყენება დანიშნულების ფურცლების რეალურად გასაგზავნად. თუ არ გაწერთ, გაგზავნა იმუშავებს უსაფრთხო დემონსტრაციული სიმულაციით.
+                    შეიყვანეთ EmailJS Service ID, Template ID და Public Key. ეს პარამეტრები ინახება Firebase-ში და გამოიყენება დანიშნულების რეალურად გასაგზავნად.
                   </p>
 
                   <div className="space-y-3">
-                    <div className="grid grid-cols-3 gap-2">
-                      <div className="col-span-2">
-                        <label className="block text-xs font-bold text-slate-700 mb-1">SMTP ჰოსტი</label>
-                        <input
-                          type="text"
-                          value={settings.smtpHost}
-                          onChange={(e) => setSettings({ ...settings, smtpHost: e.target.value })}
-                          placeholder="smtp.gmail.com"
-                          className="w-full h-10 px-3 border border-slate-200 rounded-lg text-xs outline-none focus:border-emerald-500 transition"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-slate-700 mb-1">პორტი</label>
-                        <input
-                          type="number"
-                          value={settings.smtpPort || ''}
-                          onChange={(e) => setSettings({ ...settings, smtpPort: parseInt(e.target.value) || 587 })}
-                          className="w-full h-10 px-3 border border-slate-200 rounded-lg text-xs outline-none focus:border-emerald-500 transition"
-                        />
-                      </div>
-                    </div>
-
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1">SMTP მომხმარებელი (User / Email)</label>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">EmailJS Service ID</label>
                       <input
                         type="text"
-                        value={settings.smtpUser}
-                        onChange={(e) => setSettings({ ...settings, smtpUser: e.target.value })}
-                        placeholder="giorgi@clinic.ge"
+                        value={settings.emailJsServiceId}
+                        onChange={(e) => setSettings({ ...settings, emailJsServiceId: e.target.value })}
+                        placeholder="service_xxxxxxx"
                         className="w-full h-10 px-3 border border-slate-200 rounded-lg text-xs outline-none focus:border-emerald-500 transition"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1">SMTP პაროლი / App Password</label>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">EmailJS Template ID</label>
                       <input
-                        type="password"
-                        value={settings.smtpPass}
-                        onChange={(e) => setSettings({ ...settings, smtpPass: e.target.value })}
-                        placeholder="••••••••••••••"
+                        type="text"
+                        value={settings.emailJsTemplateId}
+                        onChange={(e) => setSettings({ ...settings, emailJsTemplateId: e.target.value })}
+                        placeholder="template_xxxxxxx"
                         className="w-full h-10 px-3 border border-slate-200 rounded-lg text-xs outline-none focus:border-emerald-500 transition"
                       />
                     </div>
 
-                    <div className="flex items-center gap-2 pt-1">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">EmailJS Public Key</label>
                       <input
-                        type="checkbox"
-                        id="secure_chk"
-                        checked={settings.smtpSecure}
-                        onChange={(e) => setSettings({ ...settings, smtpSecure: e.target.checked })}
-                        className="w-4 h-4 text-emerald-600 border-slate-200 rounded"
+                        type="text"
+                        value={settings.emailJsPublicKey}
+                        onChange={(e) => setSettings({ ...settings, emailJsPublicKey: e.target.value })}
+                        placeholder="public_xxxxxxx"
+                        className="w-full h-10 px-3 border border-slate-200 rounded-lg text-xs outline-none focus:border-emerald-500 transition"
                       />
-                      <label htmlFor="secure_chk" className="text-xs font-bold text-slate-700 col-span-2">
-                        SSL უსაფრთხოება (Secure TLS)
-                      </label>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">გამომგზავნის სახელი</label>
+                      <input
+                        type="text"
+                        value={settings.emailJsFromName}
+                        onChange={(e) => setSettings({ ...settings, emailJsFromName: e.target.value })}
+                        placeholder="ექიმი გიორგი იმედაშვილი"
+                        className="w-full h-10 px-3 border border-slate-200 rounded-lg text-xs outline-none focus:border-emerald-500 transition"
+                      />
                     </div>
                   </div>
 
@@ -1579,7 +1456,7 @@ export default function App() {
                     type="submit"
                     className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold cursor-pointer transition"
                   >
-                    ფოსტის პარამეტრების შენახვა
+                    EmailJS პარამეტრების შენახვა
                   </button>
                 </form>
 

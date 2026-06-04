@@ -1,20 +1,20 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# დანიშნულების კლინიკური პორტალი
 
-# Run and deploy your AI Studio app
+React + Vite აპი ექიმის კლინიკური ჩანაწერებისთვის, დანიშნულების შაბლონებისთვის და EmailJS-ით პაციენტთან გაგზავნისთვის.
 
-This contains everything you need to run your app locally.
+## მონაცემები
 
-View your app in AI Studio: https://ai.studio/apps/2d8cc972-c99f-44e7-93dc-c9e65c27286e
+ყველა ჩანაწერი, შაბლონი და პარამეტრი ინახება Firebase Firestore-ში:
 
-## Run Locally
+- `app/settings`
+- `records`
+- `templates`
 
-**Prerequisites:**  Node.js
+## ლოკალურად გაშვება
 
+```bash
+npm install
+npm run dev
+```
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+Firebase config უკვე ჩაშენებულია. საჭიროების შემთხვევაში შეგიძლიათ გადააწეროთ `VITE_FIREBASE_*` env ცვლადებით.
