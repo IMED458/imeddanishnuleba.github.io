@@ -22,7 +22,7 @@ export const defaultSettings: AppSettings = {
   doctorPasswordHash: 'giorgi591',
   emailJsServiceId: 'service_4fawvgm',
   emailJsTemplateId: 'template_yzuhn16',
-  emailJsPublicKey: '',
+  emailJsPublicKey: 'oWNpureqJLcYOWZyC',
   emailJsFromName: 'ექიმი გიორგი იმედაშვილი',
 };
 
