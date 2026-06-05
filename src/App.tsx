@@ -91,9 +91,9 @@ export default function App() {
   const [userActive, setUserActive] = useState(true);
 
   const activeDoctor = {
-    name: currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : (settings?.doctorName || defaultSettings.doctorName),
-    phone: currentUser?.phone || settings?.doctorPhone || defaultSettings.doctorPhone,
-    email: currentUser?.email || settings?.doctorEmail || defaultSettings.doctorEmail,
+    name: currentUser ? `${currentUser.firstName} ${currentUser.lastName}`.trim() : (settings?.doctorName || defaultSettings.doctorName),
+    phone: currentUser ? currentUser.phone.trim() : (settings?.doctorPhone || defaultSettings.doctorPhone),
+    email: currentUser ? currentUser.email.trim() : (settings?.doctorEmail || defaultSettings.doctorEmail),
   };
 
   const getRecordDoctor = (record?: MedicalRecord | null) => record?.doctor || activeDoctor;
@@ -671,7 +671,7 @@ export default function App() {
                   დანიშნულების მართვა
                 </h1>
                 <p className="text-[11px] text-emerald-600 font-medium mt-0.5">
-                  {activeDoctor.name} • {activeDoctor.phone}
+                  {activeDoctor.name}{activeDoctor.phone ? ` • ${activeDoctor.phone}` : ''}
                 </p>
               </div>
             </div>

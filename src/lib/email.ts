@@ -76,6 +76,11 @@ export async function sendPrescriptionEmail({ record, subject, settings }: SendP
     throw new Error('EmailJS პარამეტრები არ არის შევსებული. შეავსეთ Service ID, Template ID და Public Key პარამეტრებში.');
   }
 
+  const contactInfo = [
+    settings.doctorPhone ? `ტელ: ${settings.doctorPhone}` : '',
+    settings.doctorEmail ? `ელ-ფოსტა: ${settings.doctorEmail}` : '',
+  ].filter(Boolean).join('\n');
+
   await emailjs.send(
     settings.emailJsServiceId,
     settings.emailJsTemplateId,
@@ -83,6 +88,8 @@ export async function sendPrescriptionEmail({ record, subject, settings }: SendP
       to_email: record.patient.email,
       to_name: record.patient.name,
       from_name: settings.emailJsFromName || settings.doctorName,
+      from_email: settings.doctorEmail,
+      reply_to: settings.doctorEmail,
       doctor_name: settings.doctorName,
       doctor_phone: settings.doctorPhone,
       doctor_email: settings.doctorEmail,
@@ -91,7 +98,7 @@ export async function sendPrescriptionEmail({ record, subject, settings }: SendP
       date: record.patient.visitDate,
       prescription_text: htmlToFormattedText(record.prescription),
       recommendations: '',
-      contact_info: `ტელ: ${settings.doctorPhone}\nელ-ფოსტა: ${settings.doctorEmail}`,
+      contact_info: contactInfo,
       visit_date: record.patient.visitDate,
       prescription_html: record.prescription,
       message: `მოგესალმებით ${record.patient.name}, გიგზავნით თქვენს სამედიცინო დანიშნულებას.`,
