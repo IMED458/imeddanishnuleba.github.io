@@ -20,6 +20,7 @@ export interface MedicalRecord {
     name: string;
     phone: string;
     email: string;
+    emailJsServiceId?: string;
   };
   complaints: string;
   anamnesis: string;
@@ -56,6 +57,7 @@ export interface ClinicalUser {
   lastName: string;
   phone: string;
   email: string;
+  emailJsServiceId?: string;
   username: string;
   password: string;
   role: 'admin' | 'doctor';

@@ -85,6 +85,7 @@ export default function App() {
   const [userLastName, setUserLastName] = useState('');
   const [userPhone, setUserPhone] = useState('');
   const [userEmail, setUserEmail] = useState('');
+  const [userEmailJsServiceId, setUserEmailJsServiceId] = useState('');
   const [userUsername, setUserUsername] = useState('');
   const [userPassword, setUserPassword] = useState('');
   const [userRole, setUserRole] = useState<'admin' | 'doctor'>('doctor');
@@ -94,9 +95,16 @@ export default function App() {
     name: currentUser ? `${currentUser.firstName} ${currentUser.lastName}`.trim() : (settings?.doctorName || defaultSettings.doctorName),
     phone: currentUser ? currentUser.phone.trim() : (settings?.doctorPhone || defaultSettings.doctorPhone),
     email: currentUser ? currentUser.email.trim() : (settings?.doctorEmail || defaultSettings.doctorEmail),
+    emailJsServiceId: currentUser?.emailJsServiceId?.trim() || settings?.emailJsServiceId || defaultSettings.emailJsServiceId,
   };
 
-  const getRecordDoctor = (record?: MedicalRecord | null) => record?.doctor || activeDoctor;
+  const getRecordDoctor = (record?: MedicalRecord | null) => record?.doctor
+    ? {
+      ...activeDoctor,
+      ...record.doctor,
+      emailJsServiceId: record.doctor.emailJsServiceId || activeDoctor.emailJsServiceId,
+    }
+    : activeDoctor;
 
   // Load public clinical settings from Firebase. Authentication is session-only.
   useEffect(() => {
@@ -167,6 +175,7 @@ export default function App() {
     setUserLastName('');
     setUserPhone('');
     setUserEmail('');
+    setUserEmailJsServiceId('');
     setUserUsername('');
     setUserPassword('');
     setUserRole('doctor');
@@ -179,6 +188,7 @@ export default function App() {
     setUserLastName(user.lastName);
     setUserPhone(user.phone);
     setUserEmail(user.email);
+    setUserEmailJsServiceId(user.emailJsServiceId || '');
     setUserUsername(user.username);
     setUserPassword(user.password);
     setUserRole(user.role);
@@ -206,6 +216,7 @@ export default function App() {
         lastName: userLastName,
         phone: userPhone,
         email: userEmail,
+        emailJsServiceId: userEmailJsServiceId.trim(),
         username: userUsername,
         password: userPassword,
         role: userRole,
@@ -398,6 +409,7 @@ export default function App() {
           doctorName: doctor.name,
           doctorPhone: doctor.phone,
           doctorEmail: doctor.email,
+          emailJsServiceId: doctor.emailJsServiceId || settings.emailJsServiceId,
           emailJsFromName: doctor.name,
         },
       });
@@ -1676,6 +1688,13 @@ export default function App() {
                   />
                   <input
                     type="text"
+                    value={userEmailJsServiceId}
+                    onChange={(e) => setUserEmailJsServiceId(e.target.value)}
+                    placeholder="EmailJS Service ID"
+                    className="h-10 px-3 border border-slate-200 rounded-lg text-xs font-mono outline-none focus:border-emerald-500"
+                  />
+                  <input
+                    type="text"
                     required
                     value={userUsername}
                     onChange={(e) => setUserUsername(e.target.value)}
@@ -1721,6 +1740,7 @@ export default function App() {
                       <tr>
                         <th className="text-left px-3 py-2 font-bold">ექიმი</th>
                         <th className="text-left px-3 py-2 font-bold">კონტაქტი</th>
+                        <th className="text-left px-3 py-2 font-bold">EmailJS</th>
                         <th className="text-left px-3 py-2 font-bold">იუზერი</th>
                         <th className="text-left px-3 py-2 font-bold">როლი</th>
                         <th className="text-right px-3 py-2 font-bold">ქმედება</th>
@@ -1734,6 +1754,7 @@ export default function App() {
                             {!user.active && <span className="ml-2 text-[10px] text-red-500">გათიშულია</span>}
                           </td>
                           <td className="px-3 py-2 text-slate-500">{user.phone || '-'} / {user.email || '-'}</td>
+                          <td className="px-3 py-2 font-mono text-slate-500">{user.emailJsServiceId || 'default'}</td>
                           <td className="px-3 py-2 font-mono text-slate-600">{user.username}</td>
                           <td className="px-3 py-2 text-slate-500">{user.role === 'admin' ? 'ადმინისტრატორი' : 'ექიმი'}</td>
                           <td className="px-3 py-2 text-right">
