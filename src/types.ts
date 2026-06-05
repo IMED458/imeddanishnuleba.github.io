@@ -16,6 +16,11 @@ export interface Patient {
 export interface MedicalRecord {
   id: string;
   patient: Patient;
+  doctor?: {
+    name: string;
+    phone: string;
+    email: string;
+  };
   complaints: string;
   anamnesis: string;
   diagnosis: string;

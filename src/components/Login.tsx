@@ -72,7 +72,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
             კლინიკური პორტალი
           </h2>
           <p className="mt-2 text-sm text-slate-500">
-            ავტორიზაცია ექიმი გიორგი იმედაშვილისთვის
+            ავტორიზაცია ექიმის სამუშაო სივრცეში
           </p>
         </div>
 

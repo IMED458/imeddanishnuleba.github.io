@@ -90,6 +90,14 @@ export default function App() {
   const [userRole, setUserRole] = useState<'admin' | 'doctor'>('doctor');
   const [userActive, setUserActive] = useState(true);
 
+  const activeDoctor = {
+    name: currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : (settings?.doctorName || defaultSettings.doctorName),
+    phone: currentUser?.phone || settings?.doctorPhone || defaultSettings.doctorPhone,
+    email: currentUser?.email || settings?.doctorEmail || defaultSettings.doctorEmail,
+  };
+
+  const getRecordDoctor = (record?: MedicalRecord | null) => record?.doctor || activeDoctor;
+
   // Load public clinical settings from Firebase. Authentication is session-only.
   useEffect(() => {
     const loadSettings = async () => {
@@ -262,6 +270,7 @@ export default function App() {
         visitDate,
         notes: patientNotes
       },
+      doctor: activeDoctor,
       complaints,
       anamnesis,
       diagnosis,
@@ -361,8 +370,9 @@ export default function App() {
 
   // Launch Email Composer
   const openEmailComposer = (record: MedicalRecord) => {
+    const doctor = getRecordDoctor(record);
     setActiveEmailRecord(record);
-    setCustomEmailSubject(`სამედიცინო დანიშნულება - ${settings?.doctorName || 'ექიმი გიორგი იმედაშვილი'}`);
+    setCustomEmailSubject(`სამედიცინო დანიშნულება - ${doctor.name}`);
     setEmailStatus({ type: null, message: '' });
   };
 
@@ -379,10 +389,17 @@ export default function App() {
 
     try {
       if (!settings) throw new Error('პარამეტრები ჯერ არ არის ჩატვირთული.');
+      const doctor = getRecordDoctor(activeEmailRecord);
       await sendPrescriptionEmail({
         record: activeEmailRecord,
         subject: customEmailSubject,
-        settings,
+        settings: {
+          ...settings,
+          doctorName: doctor.name,
+          doctorPhone: doctor.phone,
+          doctorEmail: doctor.email,
+          emailJsFromName: doctor.name,
+        },
       });
       setEmailStatus({
         type: 'success',
@@ -545,8 +562,8 @@ export default function App() {
           {/* Executive Clinic Header */}
           <div style={{ borderBottom: '2px solid #0f172a', paddingBottom: '20px', marginBottom: '30px' }}>
             <div style={{ float: 'right', textAlign: 'right', fontSize: '9.5pt', color: '#475569', lineHeight: '1.5' }}>
-              <p style={{ margin: '0 0 2px 0' }}><strong>მობ:</strong> {settings?.doctorPhone}</p>
-              <p style={{ margin: '0 0 2px 0' }}><strong>ელ-ფოსტა:</strong> {settings?.doctorEmail}</p>
+              <p style={{ margin: '0 0 2px 0' }}><strong>მობ:</strong> {getRecordDoctor(activePrintRecord).phone}</p>
+              <p style={{ margin: '0 0 2px 0' }}><strong>ელ-ფოსტა:</strong> {getRecordDoctor(activePrintRecord).email}</p>
               <p style={{ margin: '0' }}><strong>თარიღი:</strong> {activePrintRecord.patient.visitDate}</p>
             </div>
             {/* Minimalist Medical Letterhead Symbol */}
@@ -555,7 +572,7 @@ export default function App() {
               <div style={{ position: 'absolute', top: '11px', left: '6px', width: '14px', height: '2px', backgroundColor: '#0f172a' }}></div>
             </div>
             <h2 style={{ display: 'inline-block', verticalAlign: 'middle', margin: '0', fontSize: '18pt', fontWeight: 'bold', color: '#0f172a', letterSpacing: '0.5px' }}>
-              {settings?.doctorName || 'ექიმი გიორგი იმედაშვილი'}
+              {getRecordDoctor(activePrintRecord).name}
             </h2>
             <p style={{ margin: '6px 0 0 40px', fontSize: '10pt', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1px' }}>ინდივიდუალური სამედიცინო დანიშნულების ბარათი</p>
           </div>
@@ -628,7 +645,7 @@ export default function App() {
                     <div style={{ display: 'inline-block', textAlign: 'left', width: '220px', fontSize: '10pt' }}>
                       <p style={{ margin: '0 0 40px 0', color: '#64748b', fontSize: '9.5pt' }}>ექიმის ხელმოწერა:</p>
                       <div style={{ borderBottom: '1px solid #0f172a', marginBottom: '8px' }}></div>
-                      <p style={{ margin: '0', fontWeight: 'bold', color: '#0f172a' }}>{settings?.doctorName}</p>
+                      <p style={{ margin: '0', fontWeight: 'bold', color: '#0f172a' }}>{getRecordDoctor(activePrintRecord).name}</p>
                     </div>
                   </td>
                 </tr>
@@ -654,7 +671,7 @@ export default function App() {
                   დანიშნულების მართვა
                 </h1>
                 <p className="text-[11px] text-emerald-600 font-medium mt-0.5">
-                  {currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : settings?.doctorName} • {currentUser?.phone || settings?.doctorPhone}
+                  {activeDoctor.name} • {activeDoctor.phone}
                 </p>
               </div>
             </div>
@@ -724,7 +741,7 @@ export default function App() {
                   <span className="bg-emerald-500/30 text-emerald-200 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border border-emerald-400/20">
                     სამედიცინო პორტალი
                   </span>
-                  <h2 className="text-2xl font-bold mt-3">გამარჯობა, {settings?.doctorName}!</h2>
+                  <h2 className="text-2xl font-bold mt-3">გამარჯობა, {activeDoctor.name}!</h2>
                   <p className="text-emerald-100/80 text-xs md:text-sm mt-1 mb-6 leading-relaxed">
                     აქედან მარტივად შეგიძლიათ პაციენტის ვიზიტის შექმნა, შაბლონების გამოყენება და რეცეპტების ელ-ფოსტით გაგზავნა პერსონალურ ექიმის გვერდზე.
                   </p>
@@ -1112,7 +1129,7 @@ export default function App() {
               <div>
                 <h2 className="text-lg font-bold text-slate-800">პაციენტთა სამედიცინო არქივი</h2>
                 <p className="text-xs text-slate-400">
-                  ექიმი გიორგის სრული სამედიცინო ჩანაწერები და არქივი. დუბლირება, ექსპორტი და პაციენტზე დაგზავნა
+                  {activeDoctor.name}-ს სრული სამედიცინო ჩანაწერები და არქივი. დუბლირება, ექსპორტი და პაციენტზე დაგზავნა
                 </p>
               </div>
 
@@ -1593,7 +1610,7 @@ export default function App() {
                         type="text"
                         value={settings.emailJsFromName}
                         onChange={(e) => setSettings({ ...settings, emailJsFromName: e.target.value })}
-                        placeholder="ექიმი გიორგი იმედაშვილი"
+                        placeholder="ექიმის სახელი და გვარი"
                         className="w-full h-10 px-3 border border-slate-200 rounded-lg text-xs outline-none focus:border-emerald-500 transition"
                       />
                     </div>
@@ -1820,7 +1837,7 @@ export default function App() {
                   <div className="p-5 bg-white text-left text-xs max-h-[220px] overflow-y-auto space-y-3 font-sans">
                     {/* Header */}
                     <div className="border-b-2 border-slate-800 pb-2 mb-2 text-center">
-                      <h4 className="text-sm font-bold text-slate-800 leading-none">{settings?.doctorName}</h4>
+                      <h4 className="text-sm font-bold text-slate-800 leading-none">{getRecordDoctor(activeEmailRecord).name}</h4>
                       <p className="text-[10px] text-slate-500 mt-1 font-medium">სამედიცინო დანიშნულების ფურცელი</p>
                     </div>
 
@@ -1842,8 +1859,8 @@ export default function App() {
                     {/* Footer */}
                     <div className="border-t border-slate-200 pt-2 text-center text-[10px] text-slate-400">
                       <p className="font-bold">პატივისცემით,</p>
-                      <p className="font-bold text-slate-700 leading-none mt-1">{settings?.doctorName}</p>
-                      <p className="mt-1">ტელ: {settings?.doctorPhone} | {settings?.doctorEmail}</p>
+                      <p className="font-bold text-slate-700 leading-none mt-1">{getRecordDoctor(activeEmailRecord).name}</p>
+                      <p className="mt-1">ტელ: {getRecordDoctor(activeEmailRecord).phone} | {getRecordDoctor(activeEmailRecord).email}</p>
                     </div>
 
                   </div>
